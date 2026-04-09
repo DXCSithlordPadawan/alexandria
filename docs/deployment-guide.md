@@ -96,38 +96,52 @@ systemctl list-timers alexandria-sync.timer
 
 ## 7. Firewall Security Group
 
-On the Proxmox host, create the WAN gate security group:
+On the Proxmox host, the `config/firewall/wan-gate.rules` defines a security group for any host-level firewall policies. The Proxmox cluster does not require a WAN gate for ZIM downloads — ZIM acquisition is handled exclusively via the sneakernet protocol.
 
 ```bash
-# In the Proxmox web UI: Datacenter → Firewall → Security Groups → Add
-# Name: alexandria-wan
-# Add rules as defined in config/firewall/wan-gate.rules
-# Leave the group DISABLED by default
+# Review the firewall rules file for any site-specific host-level policies
+cat /opt/alexandria/config/firewall/wan-gate.rules
 
-# Apply to the VM/CT NIC running Alexandria containers
-# Datacenter → <VM> → Firewall → Add Security Group → alexandria-wan
+# Apply security group in Proxmox web UI:
+# Datacenter → Firewall → Security Groups → Add
+# Name: alexandria-host
+# Add rules as defined in config/firewall/wan-gate.rules
 ```
 
 ---
 
-## 8. First ZIM Download
+## 8. First ZIM Import via Sneakernet
 
-The initial Wikipedia ZIM (~120 GB) requires the WAN gate to be open. Schedule this during an approved maintenance window.
+The initial Wikipedia ZIM (~120 GB) is acquired via the sneakernet protocol. The Proxmox cluster does not connect directly to the WAN for ZIM downloads.
 
+**On the external staging server (internet-facing):**
 ```bash
-# Open WAN gate (SysAdmin only)
-/opt/alexandria/scripts/toggle_updates.sh open
+# Download ZIM archive and checksum from Kiwix mirrors
+wget -P /staging/zim/ https://download.kiwix.org/zim/wikipedia/wikipedia_en_all_maxi.zim
+wget -P /staging/zim/ https://download.kiwix.org/zim/wikipedia/wikipedia_en_all_maxi.zim.sha256
 
-# Start the download manually (runs in foreground; use tmux/screen)
-ZIM_PATH=/mnt/pve/alexandria/zim \
-ZIM_FILE=wikipedia_en_all_maxi.zim \
-KIWIX_MIRROR=https://download.kiwix.org/zim/wikipedia/ \
-  /opt/alexandria/scripts/sync_wiki.sh
+# Verify integrity before transfer
+cd /staging/zim
+sha256sum -c wikipedia_en_all_maxi.zim.sha256
 
-# When complete, close WAN gate immediately
-/opt/alexandria/scripts/toggle_updates.sh close
+# Copy verified files to FIPS 140-3 validated hardware-encrypted USB drive
+cp wikipedia_en_all_maxi.zim wikipedia_en_all_maxi.zim.sha256 /mnt/usb-encrypted/
+```
 
-# Verify integrity
+**On the Proxmox host (air-side):**
+```bash
+# Insert the encrypted USB drive, then run the sneakernet import script
+/opt/alexandria/scripts/sneakernet.sh
+
+# The script will:
+#   - Identify and mount the encrypted USB device
+#   - Verify the sha256 checksum
+#   - Atomically replace the ZIM archive
+#   - Unmount and eject the USB
+#   - Log the import to /var/log/alexandria/sneakernet.log
+#   - Restart the Kiwix container
+
+# Verify the import
 /opt/alexandria/scripts/verify_zim.sh /mnt/pve/alexandria/zim
 ```
 
@@ -175,31 +189,66 @@ podman exec alexandria-webui \
 
 ---
 
-## 11. Reverse Proxy (TLS)
+## 11. Reverse Proxy (TLS via Traefik)
 
-The WebUI binds to `127.0.0.1:3000` only. Expose it externally via nginx or Caddy with TLS:
+The WebUI binds to `127.0.0.1:3000` only. The existing Traefik instance handles TLS termination using certificates from the self-hosted PKI server.
 
-```nginx
-# /etc/nginx/sites-available/alexandria
-server {
-    listen 443 ssl http2;
-    server_name alexandria.internal;
+**Traefik dynamic configuration** — drop this file into Traefik's file provider directory (typically `/etc/traefik/dynamic/`):
 
-    ssl_certificate     /etc/ssl/alexandria/cert.pem;
-    ssl_certificate_key /etc/ssl/alexandria/key.pem;
-    ssl_protocols       TLSv1.3;
-    ssl_ciphers         TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256;
+```yaml
+# /etc/traefik/dynamic/alexandria.yml
+http:
+  routers:
+    alexandria-webui:
+      rule: "Host(`alexandria.internal`)"
+      entryPoints:
+        - websecure
+      service: alexandria-webui
+      tls:
+        certResolver: internal-pki
+      middlewares:
+        - secureHeaders
+        - rateLimit
 
-    location / {
-        proxy_pass         http://127.0.0.1:3000;
-        proxy_set_header   Host $host;
-        proxy_set_header   X-Real-IP $remote_addr;
-        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto https;
-        proxy_read_timeout 300s;
-    }
-}
+    alexandria-kiwix:
+      rule: "Host(`kiwix.alexandria.internal`)"
+      entryPoints:
+        - websecure
+      service: alexandria-kiwix
+      tls:
+        certResolver: internal-pki
+
+  services:
+    alexandria-webui:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:3000"
+
+    alexandria-kiwix:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:8080"
+
+  middlewares:
+    secureHeaders:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        contentSecurityPolicy: "default-src 'self'"
+        referrerPolicy: "strict-origin-when-cross-origin"
+
+    rateLimit:
+      rateLimit:
+        average: 100
+        burst: 50
 ```
+
+See `config/traefik/` for the full Traefik static configuration and the complete dynamic config referencing the self-hosted PKI ACME resolver.
 
 ---
 

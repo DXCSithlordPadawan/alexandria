@@ -10,9 +10,9 @@ graph TD
     A[Project Alexandria] --> B[SysAdmin]
     A --> C[AI Architect]
     A --> D[Researcher]
-    B -->|Owns| E[Infrastructure\nSecurity\nWAN gating]
-    C -->|Owns| F[AI stack\nTool development\nModel management]
-    D -->|Owns| G[Research queries\nLocal edit authoring]
+    B -->|Owns| E["Infrastructure<br/>Security<br/>Sneakernet import"]
+    C -->|Owns| F["AI stack<br/>Tool development<br/>Model management"]
+    D -->|Owns| G["Research queries<br/>Local edit authoring"]
 ```
 
 ---
@@ -32,14 +32,14 @@ graph TD
 
 **Key tasks:**
 - Manages container lifecycle and storage pool
-- Controls WAN gate (only role permitted to open it)
+- Manages sneakernet USB imports (only role permitted to import ZIM files)
 - Responds to security incidents
 - Performs quarterly rebuilds and secret rotation
 - Reviews audit logs
 
 **Pain points Alexandria addresses:**
-- Automated WAN gating with full audit trail removes manual firewall management
-- Systemd timer automation removes the need for manual sync scheduling
+- Sneakernet protocol with full audit trail removes ad-hoc WAN access management
+- Systemd-based sneakernet verification removes manual integrity checking
 - Hardened containers with documented security posture simplify compliance evidence
 
 ---

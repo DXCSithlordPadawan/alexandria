@@ -53,10 +53,10 @@ Project Alexandria establishes a production-grade, offline-first knowledge ecosy
 ## 3. TECHNICAL SPECIFICATIONS
 
 ### 3.1 Architecture
-The system utilizes a Sidecar Pattern on a Proxmox 9.1 host using rootless Podman containers.
+The system utilizes a layered architecture on a Proxmox 9.1 host using rootless Podman containers. ZIM file acquisition uses a **sneakernet protocol** as the primary and only method — an external internet-facing staging server downloads the Wikipedia ZIM archive and transfers it to the Proxmox cluster via FIPS 140-3 validated encrypted USB media. The Proxmox cluster has no direct WAN access for content downloads.
 
+* **External Staging Server:** Internet-facing; downloads ZIM archive; transfers to Proxmox via encrypted USB.
 * **Base Layer:** Kiwix-Serve (Read-Only .zim mount).
-* **Update Layer:** Alpine-based Sidecar (Weekly wget sync).
 * **Intelligence Layer:** Ollama (Inference) + Open WebUI (Orchestration).
 
 ### 3.2 Podman Configuration (Hardened)
@@ -72,18 +72,13 @@ services:
       - /mnt/pve/alexandria/zim:/data/zim:ro,Z
     networks: [internal]
 
-  updater:
-    image: alpine:latest
-    container_name: alexandria-sync
-    volumes:
-      - /mnt/pve/alexandria/zim:/data/zim:rw,Z
-    entrypoint: ["/bin/sh", "-c", "while true; do sleep 604800; wget -N -P /data/zim [https://download.kiwix.org/zim/wikipedia/wikipedia_en_all_maxi.zim](https://download.kiwix.org/zim/wikipedia/wikipedia_en_all_maxi.zim); done"]
-    networks: [internal]
+  # NOTE: No updater sidecar. ZIM files are imported via sneakernet.sh
+  #       from a FIPS 140-3 encrypted USB populated by the external staging server.
 
 networks:
   internal:
     driver: bridge
-```	
+```
 
 ## 4. SECURITY & COMPLIANCE
 
@@ -93,11 +88,14 @@ networks:
 * **CIS Level 2:** Rootless Podman execution with unprivileged UID mapping (100000+). Hardened kernel parameters applied via `sysctl`.
 * **OWASP Top 10:** Protection against A03:2021 (Injection) via strict API input validation in Open WebUI Tools.
 
-### 4.2 Network Time-Gating
-To satisfy **NIST AC-4 (Information Flow Enforcement)**, outbound WAN access is strictly gated.
-* **Schedule:** Sunday 02:00 – 04:00 (Weekly Update Window).
-* **Mechanism:** Systemd timers triggering `pve-firewall` Security Group toggles on the Proxmox host.
-* **Manual Override:** Restricted to `SysAdmin` role via `toggle_updates.sh` script.
+### 4.2 Sneakernet Protocol
+To satisfy **NIST AC-4 (Information Flow Enforcement)** and **MP-5 (Media Transport)**, ZIM file acquisition uses a sneakernet protocol as the **primary and only** method. The Proxmox cluster does not connect directly to the WAN for content downloads.
+
+* **Staging:** An external internet-facing staging server downloads the latest `wikipedia_en_all_maxi.zim` archive and its `.sha256` checksum from the Kiwix library.
+* **Verification:** The staging server performs checksum validation before transfer.
+* **Transfer:** Verified files are copied to a FIPS 140-3 validated, hardware-encrypted USB drive.
+* **Import:** SysAdmin inserts the USB into the Proxmox host and runs `scripts/sneakernet.sh`, which mounts the device, verifies integrity, and atomically replaces the ZIM archive.
+* **Service Refresh:** Kiwix container is restarted automatically by `sneakernet.sh` after a successful import.
 
 ---
 
@@ -150,33 +148,30 @@ fact-based information derived solely from the local Wikipedia mirror.
 - Cross-References: Suggest 3 related local topics.
 ```
 
-## 8. SNEAKER-NET UPDATE PROTOCOL (AIR-GAP)
+## 8. SNEAKERNET UPDATE PROTOCOL (PRIMARY ZIM ACQUISITION)
 
-In environments where the Proxmox host is fully air-gapped or network-restricted:
+The sneakernet protocol is the **primary and only** method for acquiring ZIM files. The Proxmox cluster has no direct WAN access for content downloads. All ZIM updates flow through an external internet-facing staging server.
 
-### 1. **Staging:** On a secure, internet-facing workstation, download the latest `.zim` archive and its corresponding `.sha256` hash file from the Kiwix library.
+### 1. **Staging:** On the external internet-facing staging server, download the latest `.zim` archive and its corresponding `.sha256` hash file from the Kiwix library.
 ### 2. **Verification:** Execute a checksum validation to ensure file integrity before transfer:
    ```bash
    sha256sum -c wikipedia_en_all_maxi_2026-03.zim.sha256
    ```
-### 3. Encrypted Transfer: Copy the verified files to a FIPS 140-3 validated, hardware-encrypted USB drive.
+### 3. **Encrypted Transfer:** Copy the verified files to a FIPS 140-3 validated, hardware-encrypted USB drive (e.g., Apricorn Aegis or equivalent).
 
-### 4. Physical Import:
+### 4. **Physical Import:** Insert the USB drive into the Proxmox host and run the automated import script:
+   ```bash
+   /opt/alexandria/scripts/sneakernet.sh
+   ```
+   The script will:
+   - Identify and mount the USB device
+   - Verify the `.sha256` checksum
+   - Atomically replace the ZIM archive at `/mnt/pve/alexandria/zim/`
+   - Unmount and eject the USB device
+   - Log the import event to `/var/log/alexandria/sneakernet.log`
 
-Insert the drive into the Proxmox host.
-
-Identify the device (e.g., /dev/sdb1) and mount it.
-
-Move the archive to the local ZFS/LVM storage:
-```text
-mount /dev/sdb1 /mnt/usb
-cp /mnt/usb/*.zim /mnt/pve/alexandria/zim/
-umount /mnt/usb
- ```
-
-5. Service Refresh: Restart the Kiwix container to index the new archive:
-
-```text
-podman restart alexandria-wiki
-```
+### 5. **Service Refresh:** The `sneakernet.sh` script automatically restarts the Kiwix container after a successful import:
+   ```bash
+   podman restart alexandria-wiki
+   ```
  

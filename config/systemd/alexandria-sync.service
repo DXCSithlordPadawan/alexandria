@@ -1,10 +1,7 @@
 [Unit]
-Description=Alexandria Wikipedia ZIM Sync Service
+Description=Alexandria Sneakernet Import Verification Service
 Documentation=file:///opt/alexandria/docs/maintenance-guide.md
-After=network-online.target
-Wants=network-online.target
-# Ensure WAN firewall rule is toggled on before sync, off after
-After=alexandria-wan-open.service
+After=local-fs.target
 
 [Service]
 Type=oneshot
@@ -12,10 +9,8 @@ User=alexandria
 Group=alexandria
 WorkingDirectory=/opt/alexandria
 
-# Open the WAN gate, run the sync, close the WAN gate regardless of outcome
-ExecStartPre=/opt/alexandria/scripts/toggle_updates.sh open
-ExecStart=/opt/alexandria/scripts/sync_wiki.sh
-ExecStartPost=/opt/alexandria/scripts/toggle_updates.sh close
+# Verify the current ZIM archive integrity after a sneakernet import
+ExecStart=/opt/alexandria/scripts/verify_zim.sh /mnt/pve/alexandria/zim
 
 # Harden the service unit itself
 NoNewPrivileges=true
@@ -24,7 +19,7 @@ ProtectHome=true
 ReadWritePaths=/mnt/pve/alexandria/zim
 PrivateTmp=true
 PrivateDevices=true
-RestrictAddressFamilies=AF_INET AF_INET6
+RestrictAddressFamilies=AF_UNIX
 RestrictNamespaces=true
 SystemCallFilter=@system-service
 CapabilityBoundingSet=

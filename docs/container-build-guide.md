@@ -56,19 +56,7 @@ podman build \
   services/kiwix/
 ```
 
-### 3.2 Updater Sidecar
-
-The updater copies `sync_wiki.sh` at build time. Ensure the script is in `services/updater/` before building:
-
-```bash
-cp scripts/sync_wiki.sh services/updater/sync_wiki.sh
-
-podman build \
-  --tag localhost/alexandria-sync:1.0.0 \
-  services/updater/
-```
-
-### 3.3 ChromaDB
+### 3.2 ChromaDB
 
 ```bash
 podman build \
@@ -76,7 +64,7 @@ podman build \
   services/chromadb/
 ```
 
-### 3.4 Ollama
+### 3.3 Ollama
 
 ```bash
 podman build \
@@ -84,7 +72,7 @@ podman build \
   services/ollama/
 ```
 
-### 3.5 Open WebUI
+### 3.4 Open WebUI
 
 ```bash
 podman build \
@@ -192,4 +180,4 @@ ollama (healthy) ────┤
 kiwix (healthy) ─────┘
 ```
 
-The `updater` sidecar starts independently and does not block the WebUI.
+ZIM files are imported via `sneakernet.sh` before the containers start. The `kiwix` container mounts the ZIM directory read-only and will start cleanly as long as a valid ZIM file is present.

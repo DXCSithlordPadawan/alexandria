@@ -14,9 +14,9 @@ Project Alexandria delivers a sovereign, air-gappable knowledge platform that el
 ```mermaid
 flowchart LR
     subgraph Inputs
-        A[Wikipedia ZIM\n120 GB mirror]
-        B[Local Markdown Edits\nSpecialist knowledge]
-        C[Ollama LLM\nLocal inference]
+        A["Wikipedia ZIM<br/>120 GB mirror"]
+        B["Local Markdown Edits<br/>Specialist knowledge"]
+        C["Ollama LLM<br/>Local inference"]
     end
 
     subgraph Alexandria Platform
@@ -32,10 +32,10 @@ flowchart LR
     end
 
     subgraph Business Value
-        J[Operational Security\nNo external data leakage]
-        K[Research Productivity\nFaster, cited answers]
-        L[Compliance Assurance\nFIPS, NIST, DISA STIG]
-        M[Knowledge Sovereignty\nNo vendor dependency]
+        J["Operational Security<br/>No external data leakage"]
+        K["Research Productivity<br/>Faster, cited answers"]
+        L["Compliance Assurance<br/>FIPS, NIST, DISA STIG"]
+        M["Knowledge Sovereignty<br/>No vendor dependency"]
     end
 
     A --> D --> F

@@ -1,0 +1,45 @@
+# Project Alexandria — Prometheus Configuration
+# Scrape interval: 30s for all Alexandria components
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    environment: "proxmox-cluster"
+    project: "alexandria"
+
+scrape_configs:
+  - job_name: "alexandria-webui"
+    static_configs:
+      - targets: ["localhost:3000"]
+        labels:
+          service: "openwebui"
+    metrics_path: /metrics
+
+  - job_name: "alexandria-kiwix"
+    static_configs:
+      - targets: ["localhost:8080"]
+        labels:
+          service: "kiwix"
+    metrics_path: /metrics
+
+  - job_name: "alexandria-chromadb"
+    static_configs:
+      - targets: ["localhost:8000"]
+        labels:
+          service: "chromadb"
+    metrics_path: /metrics
+
+  - job_name: "podman-exporter"
+    static_configs:
+      - targets: ["localhost:9882"]
+        labels:
+          service: "podman"
+    metrics_path: /metrics
+
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["localhost:9100"]
+        labels:
+          service: "host"
+    metrics_path: /metrics

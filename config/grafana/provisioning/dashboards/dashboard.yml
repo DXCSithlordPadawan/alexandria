@@ -1,0 +1,14 @@
+# Project Alexandria — Grafana Dashboard Provisioning
+apiVersion: 1
+
+providers:
+  - name: Alexandria
+    orgId: 1
+    folder: "Alexandria"
+    folderUid: "alexandria"
+    type: file
+    disableDeletion: true
+    editable: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards
