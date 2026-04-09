@@ -1,0 +1,28 @@
+# Containerfile — Ollama LLM Inference Engine (hardened)
+# ─────────────────────────────────────────────────────────────────────────────
+# Reference: https://github.com/ollama/ollama/releases
+# Model weights are pulled at first run via `ollama pull`, not baked in.
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM ollama/ollama:0.6.5
+
+LABEL maintainer="Iain Reid <iain.reid@alexandria.local>" \
+      org.opencontainers.image.title="alexandria-ollama" \
+      org.opencontainers.image.description="Ollama LLM inference engine" \
+      org.opencontainers.image.version="1.0.0"
+
+ENV OLLAMA_HOST=0.0.0.0 \
+    OLLAMA_NUM_PARALLEL=1 \
+    OLLAMA_MAX_LOADED_MODELS=1
+
+# Ollama stores models in /root/.ollama by default; redirect to /data/ollama
+# for explicit volume management and SELinux labelling
+RUN mkdir -p /data/ollama \
+    && ln -sf /data/ollama /root/.ollama
+
+VOLUME ["/data/ollama"]
+
+EXPOSE 11434
+
+ENTRYPOINT ["ollama"]
+CMD ["serve"]

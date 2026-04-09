@@ -1,0 +1,31 @@
+# Containerfile — Open WebUI (hardened)
+# ─────────────────────────────────────────────────────────────────────────────
+# Reference: https://github.com/open-webui/open-webui/releases
+# The librarian_tool.py is injected at build time so it is available
+# as a registered Open WebUI Tool without requiring runtime file mounts.
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM ghcr.io/open-webui/open-webui:0.6.5
+
+LABEL maintainer="Iain Reid <iain.reid@alexandria.local>" \
+      org.opencontainers.image.title="alexandria-webui" \
+      org.opencontainers.image.description="Open WebUI with Alexandria Librarian tool" \
+      org.opencontainers.image.version="1.0.0"
+
+# Install Python deps for librarian tool (minimal, pinned)
+# open-webui base image ships Python 3.11
+RUN pip install --no-cache-dir \
+        chromadb==0.6.3 \
+        httpx==0.28.1 \
+        sentence-transformers==3.4.1
+
+# Copy the Librarian tool and RAG ingestor
+COPY --chown=root:root librarian_tool.py /app/backend/tools/librarian_tool.py
+COPY --chown=root:root ingest_edits.py   /app/backend/tools/ingest_edits.py
+
+# Secrets path for WEBUI_SECRET_KEY (podman secret mount)
+ENV WEBUI_SECRET_KEY_FILE=/run/secrets/webui_secret_key
+
+EXPOSE 8080
+
+# Upstream entrypoint handles startup

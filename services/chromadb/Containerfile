@@ -1,0 +1,33 @@
+# Containerfile — ChromaDB Vector Store (hardened)
+# ─────────────────────────────────────────────────────────────────────────────
+# Pinned release — update on upstream security advisories.
+# Reference: https://github.com/chroma-core/chroma/releases
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM chromadb/chroma:0.6.3
+
+LABEL maintainer="Iain Reid <iain.reid@alexandria.local>" \
+      org.opencontainers.image.title="alexandria-chroma" \
+      org.opencontainers.image.description="ChromaDB vector store for RAG overlay" \
+      org.opencontainers.image.version="1.0.0"
+
+# Disable telemetry at build time (NIST SI-12 data handling)
+ENV ANONYMIZED_TELEMETRY=false \
+    ALLOW_RESET=false \
+    CHROMA_SERVER_AUTH_CREDENTIALS_FILE="" \
+    PERSIST_DIRECTORY=/data/chromadb
+
+# The upstream image runs as root; correct this
+RUN groupadd -g 10002 chroma \
+    && useradd -u 10002 -g chroma -s /usr/sbin/nologin -M chroma \
+    && mkdir -p /data/chromadb \
+    && chown -R chroma:chroma /data/chromadb
+
+USER chroma
+
+VOLUME ["/data/chromadb"]
+
+EXPOSE 8000
+
+# Explicit CMD — no shell expansion attack surface
+CMD ["uvicorn", "chromadb.app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

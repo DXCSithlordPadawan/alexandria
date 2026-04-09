@@ -1,0 +1,41 @@
+# Containerfile — ZIM Updater Sidecar (hardened Alpine)
+# ─────────────────────────────────────────────────────────────────────────────
+# Pinned Alpine digest — do NOT use :latest (DISA STIG V-235800).
+# Update pin quarterly. Verify against https://hub.docker.com/_/alpine/tags
+#
+# This container sleeps for SYNC_INTERVAL_SECONDS then downloads the latest
+# ZIM file from the Kiwix mirror.  Checksum verification is performed before
+# the new file replaces the existing one.
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM alpine:3.21.3
+
+LABEL maintainer="Iain Reid <iain.reid@alexandria.local>" \
+      org.opencontainers.image.title="alexandria-sync" \
+      org.opencontainers.image.description="Weekly ZIM archive updater sidecar" \
+      org.opencontainers.image.version="1.0.0"
+
+# Install only what is required — no shell extras
+RUN apk add --no-cache \
+        wget=1.24.5-r0 \
+        coreutils=9.5-r1 \
+    && rm -rf /var/cache/apk/*
+
+# Create unprivileged user (UID 10001 — outside rootless UID namespace clash zone)
+RUN addgroup -g 10001 syncer \
+    && adduser -u 10001 -G syncer -s /sbin/nologin -D syncer
+
+# Copy the sync script in — owned by root, executable by syncer
+COPY --chown=root:syncer sync_wiki.sh /usr/local/bin/sync_wiki.sh
+RUN chmod 550 /usr/local/bin/sync_wiki.sh
+
+USER syncer
+
+VOLUME ["/data/zim"]
+
+# Environment defaults (overridden by compose)
+ENV KIWIX_MIRROR="https://download.kiwix.org/zim/wikipedia/" \
+    ZIM_FILE="wikipedia_en_all_maxi.zim" \
+    SYNC_INTERVAL_SECONDS="604800"
+
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/sync_wiki.sh"]

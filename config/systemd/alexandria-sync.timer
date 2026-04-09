@@ -1,0 +1,15 @@
+[Unit]
+Description=Alexandria Wikipedia Sync Timer
+Documentation=file:///opt/alexandria/docs/maintenance-guide.md
+After=network-online.target
+Wants=network-online.target
+
+[Timer]
+# Weekly on Sunday at 02:00 — NIST AC-4 WAN gate window
+OnCalendar=Sun *-*-* 02:00:00
+RandomizedDelaySec=300
+Persistent=true
+Unit=alexandria-sync.service
+
+[Install]
+WantedBy=timers.target

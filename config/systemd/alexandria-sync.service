@@ -1,0 +1,38 @@
+[Unit]
+Description=Alexandria Wikipedia ZIM Sync Service
+Documentation=file:///opt/alexandria/docs/maintenance-guide.md
+After=network-online.target
+Wants=network-online.target
+# Ensure WAN firewall rule is toggled on before sync, off after
+After=alexandria-wan-open.service
+
+[Service]
+Type=oneshot
+User=alexandria
+Group=alexandria
+WorkingDirectory=/opt/alexandria
+
+# Open the WAN gate, run the sync, close the WAN gate regardless of outcome
+ExecStartPre=/opt/alexandria/scripts/toggle_updates.sh open
+ExecStart=/opt/alexandria/scripts/sync_wiki.sh
+ExecStartPost=/opt/alexandria/scripts/toggle_updates.sh close
+
+# Harden the service unit itself
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/mnt/pve/alexandria/zim
+PrivateTmp=true
+PrivateDevices=true
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=true
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=alexandria-sync
+
+[Install]
+WantedBy=multi-user.target

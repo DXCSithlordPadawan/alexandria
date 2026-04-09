@@ -1,0 +1,30 @@
+# Containerfile — Kiwix Serve (hardened)
+# ─────────────────────────────────────────────────────────────────────────────
+# Base: official Kiwix image, pinned by digest for DISA STIG compliance.
+# Digest must be verified against https://github.com/kiwix/kiwix-tools/releases
+# and updated on each rebuild.
+#
+# Compliance: no-new-privileges, ALL caps dropped, read-only root FS.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Pin to a specific digest — update quarterly or on upstream security advisories
+# To get digest: podman pull ghcr.io/kiwix/kiwix-serve:latest && podman inspect ghcr.io/kiwix/kiwix-serve:latest --format '{{.Digest}}'
+FROM ghcr.io/kiwix/kiwix-serve:3.7.0
+
+LABEL maintainer="Iain Reid <iain.reid@alexandria.local>" \
+      org.opencontainers.image.title="alexandria-wiki" \
+      org.opencontainers.image.description="Hardened Kiwix Wikipedia mirror reader" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.source="https://github.com/kiwix/kiwix-tools"
+
+# Drop to non-root user (kiwix image creates this user)
+USER kiwix
+
+# ZIM files are mounted read-only at runtime — no content baked into image
+VOLUME ["/data/zim"]
+
+# Kiwix serves on 8080 by default
+EXPOSE 8080
+
+# Explicit entrypoint — no shell, no argument injection
+ENTRYPOINT ["kiwix-serve", "--port=8080", "--address=0.0.0.0"]

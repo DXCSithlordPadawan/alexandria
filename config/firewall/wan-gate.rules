@@ -1,0 +1,40 @@
+# Alexandria WAN Gate — Proxmox Firewall Rules
+# ─────────────────────────────────────────────────────────────────────────────
+# Compliance: NIST SP 800-53 AC-4 (Information Flow Enforcement)
+#
+# These rules are loaded into the Proxmox firewall Security Group
+# named "alexandria-wan".  The group is applied to the Proxmox VM/CT
+# NIC and toggled by toggle_updates.sh during the weekly update window.
+#
+# Security Group: alexandria-wan
+# Default policy: DROP (closed)
+# Open window: Sunday 02:00–04:00 (managed by systemd timer)
+#
+# Format: Proxmox pve-firewall .fw rule syntax
+# Reference: https://pve.proxmox.com/wiki/Firewall
+# ─────────────────────────────────────────────────────────────────────────────
+
+[group alexandria-wan]
+
+# Allow outbound HTTPS to Kiwix mirrors only (download.kiwix.org)
+# IPv4: 94.23.178.210 (kiwix.org CDN — verify current IP before use)
+OUT ACCEPT -p tcp -d download.kiwix.org --dport 443 -comment "Kiwix HTTPS"
+
+# Allow outbound DNS (required for hostname resolution during sync)
+OUT ACCEPT -p udp --dport 53 -comment "DNS resolution"
+OUT ACCEPT -p tcp --dport 53 -comment "DNS resolution TCP"
+
+# Block all other outbound traffic
+OUT DROP -comment "Default deny outbound"
+
+# Block all inbound traffic (system is receive-only during update)
+IN DROP -comment "Default deny inbound during WAN window"
+
+# ── Static host-level hardening (always applied) ──────────────────────────────
+# These rules live in the host firewall, not this group.
+# They are documented here for audit purposes only.
+#
+# - ICMP ping allowed from management VLAN only
+# - SSH restricted to management VLAN only (port 22)
+# - All container-to-container traffic on the 'internal' bridge is isolated
+# - WebUI exposed on localhost:3000 only (reverse proxy handles TLS termination)
