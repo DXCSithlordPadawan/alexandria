@@ -11,7 +11,7 @@ Project Alexandria delivers a secure, offline-first knowledge ecosystem on a sin
 
 ```mermaid
 graph TD
-    U["User / Researcher"] -->|HTTPS via reverse proxy| OW["Open WebUI :3000"]
+    U["User / Researcher"] -->|HTTPS via Traefik :443| OW["Open WebUI :3000"]
     OW -->|Ollama API| OL["Ollama LLM"]
     OW -->|Librarian Tool| LT["librarian_tool.py"]
     LT -->|Search API| KW["Kiwix :8080"]
@@ -19,11 +19,9 @@ graph TD
     CH -->|Embeddings from| ED["/data/edits"]
     KW -->|Serves| ZIM["/data/zim/*.zim"]
 
-    UP["Updater Sidecar"] -->|Weekly wget| ZIM
-    WAN["WAN / Internet"] -.->|AC-4 gated Sun 02:00| UP
-
-    SA["SysAdmin"] -->|toggle_updates.sh| FW["Proxmox Firewall"]
-    FW -.->|allow/deny| WAN
+    SA["SysAdmin"] -->|sneakernet.sh| ZIM
+    USB["FIPS 140-3 USB"] -->|Physical import| SA
+    STG["External Staging Server"] -->|Downloads ZIM from WAN| USB
 ```
 
 ## 3. Container Architecture
@@ -31,7 +29,6 @@ graph TD
 | Container | Image | Network | Role |
 |:----------|:------|:--------|:-----|
 | `alexandria-wiki` | `ghcr.io/kiwix/kiwix-serve:3.7.0` | internal | Wikipedia ZIM reader |
-| `alexandria-sync` | `alpine:3.21.3` (custom) | internal | Weekly ZIM updater |
 | `alexandria-chroma` | `chromadb/chroma:0.6.3` | ai-backend | Vector store (RAG) |
 | `alexandria-ollama` | `ollama/ollama:0.6.5` | ai-backend | LLM inference |
 | `alexandria-webui` | `ghcr.io/open-webui/open-webui:0.6.5` | internal + ai-backend | UI + orchestration |
@@ -42,7 +39,6 @@ graph TD
 graph LR
     subgraph internal [internal bridge — no external routing]
         KW[kiwix :8080]
-        UP[updater]
         OW[openwebui :8080]
     end
     subgraph ai-backend [ai-backend bridge — no external routing]
@@ -51,9 +47,10 @@ graph LR
         OW
     end
     HOST[Proxmox Host localhost] -->|127.0.0.1:3000| OW
+    TFK["Traefik :443"] -->|proxy_pass 127.0.0.1:3000| HOST
 ```
 
-Both bridges are `internal: true` — no container has a direct route to the host's external interface. Outbound internet access is exclusively through the Proxmox firewall WAN gate.
+Both bridges are `internal: true` — no container has a direct route to the host's external interface. Traefik terminates TLS externally and proxies to the WebUI on localhost.
 
 ## 4. Data Flows
 
@@ -80,25 +77,29 @@ sequenceDiagram
     OW-->>U: Display response
 ```
 
-### 4.2 Weekly ZIM Sync
+### 4.2 Sneakernet ZIM Import
 
 ```mermaid
 sequenceDiagram
-    participant T as systemd timer
-    participant SS as sync service
-    participant FW as Proxmox firewall
-    participant UP as updater container
-    participant KM as Kiwix mirror (WAN)
+    participant SA as SysAdmin
+    participant STG as External Staging Server
+    participant USB as FIPS 140-3 USB
+    participant HOST as Proxmox Host
+    participant KW as Kiwix Container
 
-    T->>SS: Fire Sun 02:00
-    SS->>FW: toggle_updates.sh open
-    SS->>UP: Trigger wget download
-    UP->>KM: Download .sha256 + .zim
-    KM-->>UP: Files transferred
-    UP->>UP: sha256sum verify
-    UP->>UP: atomic mv to /data/zim
-    SS->>FW: toggle_updates.sh close
-    SS->>SS: podman restart alexandria-wiki
+    SA->>STG: Initiate ZIM download
+    STG->>STG: wget .zim + .sha256 from Kiwix mirrors
+    STG->>STG: sha256sum verify
+    STG->>USB: Copy verified .zim + .sha256 to encrypted USB
+    SA->>HOST: Insert USB into Proxmox host
+    SA->>HOST: Run sneakernet.sh
+    HOST->>USB: Mount FIPS 140-3 encrypted USB
+    HOST->>HOST: sha256sum verify
+    HOST->>HOST: atomic mv to /mnt/pve/alexandria/zim/
+    HOST->>USB: umount and eject
+    HOST->>HOST: Log import event to sneakernet.log
+    HOST->>KW: podman restart alexandria-wiki
+    KW-->>SA: Kiwix serving new ZIM
 ```
 
 ## 5. Security Architecture
@@ -109,8 +110,9 @@ sequenceDiagram
 | Rootless execution | UID mapping 100000+ (CIS Level 2) |
 | Secret management | `podman secret` — never in compose files or env vars |
 | Network isolation | `internal: true` bridges, localhost-only WebUI bind |
-| WAN gating | pve-firewall toggle, Sunday 02:00–04:00 window only |
-| Integrity verification | sha256sum on every ZIM download and sneakernet import |
+| TLS termination | Traefik v3 with certificate from self-hosted PKI; TLS 1.3 only |
+| No direct WAN from Proxmox | ZIM acquired exclusively via sneakernet from external staging server |
+| Integrity verification | sha256sum on every sneakernet import |
 | Input validation | Query sanitisation regex in librarian_tool.py (OWASP A03) |
 | Path traversal prevention | `_is_safe_path()` in ingest_edits.py |
 

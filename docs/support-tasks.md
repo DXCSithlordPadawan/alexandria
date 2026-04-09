@@ -7,11 +7,8 @@
 
 | Task | Trigger | Owner | Log location |
 |:-----|:--------|:------|:-------------|
-| ZIM sync download | `alexandria-sync.timer` — Sunday 02:00 | SysAdmin | `journalctl -u alexandria-sync` |
-| WAN gate open | Systemd pre-exec in `alexandria-sync.service` | SysAdmin | `/var/log/alexandria/wan-gate.log` |
-| WAN gate close | Systemd post-exec in `alexandria-sync.service` | SysAdmin | `/var/log/alexandria/wan-gate.log` |
-| ZIM integrity verify | Part of sync script | SysAdmin | `journalctl -u alexandria-sync` |
 | Container healthchecks | Podman internal (30–60s interval) | SysAdmin | `podman ps` |
+| ZIM integrity verify | Part of sneakernet.sh import | SysAdmin | `/var/log/alexandria/sneakernet.log` |
 
 ---
 
@@ -19,10 +16,10 @@
 
 | # | Task | Owner | Command / Action |
 |:--|:-----|:------|:----------------|
-| W-1 | Review sync log for errors | SysAdmin | `journalctl -u alexandria-sync --since "7 days ago" \| grep -E "ERROR\|FAIL\|WARN"` |
-| W-2 | Confirm WAN gate is closed | SysAdmin | `pvesh get /cluster/firewall/groups/alexandria-wan` — must show `enable: 0` |
+| W-1 | Review sneakernet import log for errors | SysAdmin | `cat /var/log/alexandria/sneakernet.log` |
+| W-2 | Confirm staging server is not actively connected to ZIM storage | SysAdmin | Verify staging server network state per site security policy |
 | W-3 | Confirm all containers healthy | SysAdmin | `podman ps --format "table {{.Names}}\t{{.Status}}"` |
-| W-4 | Review WAN gate audit log | SysAdmin | `tail -50 /var/log/alexandria/wan-gate.log` |
+| W-4 | Review container and host audit logs | SysAdmin | `journalctl --since "7 days ago" -u alexandria-*` |
 
 ---
 
@@ -69,10 +66,10 @@
 
 | Task | Trigger | Owner | Procedure |
 |:-----|:--------|:------|:----------|
-| Air-gap ZIM import | New ZIM version on encrypted media | SysAdmin | Run `scripts/sneakernet.sh` per PRD §8 |
+| ZIM import via sneakernet | New ZIM version available on encrypted USB | SysAdmin | Run `scripts/sneakernet.sh` per PRD §8 |
 | New local edit ingest | Researcher adds `.md` file | AI Architect | `podman exec alexandria-webui python /app/backend/tools/ingest_edits.py` |
 | Incident response | Security event detected | SysAdmin | Isolate container, preserve logs, notify ISSO within 1 hour |
-| Emergency WAN gate close | Anomalous outbound traffic detected | SysAdmin | `scripts/toggle_updates.sh close` then investigate |
+| Emergency WAN gate close | Anomalous outbound traffic detected on host | SysAdmin | `scripts/toggle_updates.sh close` then investigate |
 | User account provisioning | New researcher onboarded | SysAdmin | Create Open WebUI account, set role to `User` |
 | User account deprovisioning | Staff departure | SysAdmin | Disable Open WebUI account; remove from `alexandria-admin` if applicable |
 

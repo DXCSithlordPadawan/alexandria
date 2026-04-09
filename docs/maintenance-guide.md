@@ -7,7 +7,8 @@
 
 | Frequency | Task | Owner | Script / Command |
 |:----------|:-----|:------|:----------------|
-| Weekly (automated) | ZIM sync + checksum verify | SysAdmin | `alexandria-sync.timer` |
+| As needed | ZIM import via sneakernet | SysAdmin | `scripts/sneakernet.sh` |
+| As needed | ZIM checksum verify | SysAdmin | `scripts/verify_zim.sh` |
 | Weekly (automated) | Container health check | SysAdmin | `podman ps` / healthchecks |
 | Monthly | ZFS/LVM pool scrub | SysAdmin | `zpool scrub alexandria` |
 | Monthly | Dependency version review | AI Architect | See §4 |
@@ -19,18 +20,21 @@
 
 ---
 
-## 2. Weekly ZIM Sync (Automated)
+## 2. ZIM Update via Sneakernet
 
-The `alexandria-sync.timer` fires every Sunday at 02:00. No manual action required under normal conditions.
+ZIM updates are performed manually using the sneakernet protocol. There is no automated WAN download from the Proxmox cluster.
 
-**To check last sync result:**
+**To perform a ZIM update:**
+1. On the external staging server, download the new ZIM archive and verify its checksum.
+2. Copy the verified files to a FIPS 140-3 validated hardware-encrypted USB drive.
+3. Insert the USB drive into the Proxmox host and run:
 ```bash
-journalctl -u alexandria-sync.service --since "7 days ago" | grep -E "PASS|FAIL|ERROR"
+/opt/alexandria/scripts/sneakernet.sh
 ```
 
-**To trigger a manual sync immediately (SysAdmin only):**
+**To check the last sneakernet import result:**
 ```bash
-systemctl start alexandria-sync.service
+cat /var/log/alexandria/sneakernet.log
 ```
 
 **To verify the current ZIM manually:**

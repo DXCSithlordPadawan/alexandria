@@ -1,0 +1,126 @@
+name: Alexandria CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 'Deployment target'
+        required: false
+        default: 'all'
+
+jobs:
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate podman-compose.yml
+        run: python3 -c "import yaml; yaml.safe_load(open('config/podman-compose.yml'))"
+      - name: Validate Prometheus config
+        run: python3 -c "import yaml; yaml.safe_load(open('config/prometheus/prometheus.yml'))"
+      - name: Validate Traefik config
+        run: |
+          python3 -c "import yaml; yaml.safe_load(open('config/traefik/traefik.yml'))"
+          python3 -c "import yaml; yaml.safe_load(open('config/traefik/dynamic/alexandria.yml'))"
+      - name: Validate Grafana provisioning
+        run: |
+          python3 -c "import yaml; yaml.safe_load(open('config/grafana/provisioning/datasources/prometheus.yml'))"
+          python3 -c "import yaml; yaml.safe_load(open('config/grafana/provisioning/dashboards/dashboard.yml'))"
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install bandit
+        run: pip install bandit
+      - name: Run bandit security scan
+        run: bandit -r services/ -ll
+
+  build-containers:
+    name: Build Containers (Podman)
+    runs-on: ubuntu-latest
+    needs: validate
+    strategy:
+      matrix:
+        service: [kiwix, chromadb, ollama, openwebui]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Podman
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y podman
+      - name: Build ${{ matrix.service }} image
+        run: |
+          podman build \
+            --tag localhost/alexandria-${{ matrix.service }}:${{ github.sha }} \
+            --label "build-date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --label "git-commit=${{ github.sha }}" \
+            services/${{ matrix.service }}/
+      - name: Scan image with trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: localhost/alexandria-${{ matrix.service }}:${{ github.sha }}
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+
+  ingest-validation:
+    name: Ingest Pipeline Validation
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install chromadb sentence-transformers httpx
+      - name: Lint ingest scripts
+        run: |
+          pip install pylint
+          pylint services/openwebui/ingest_edits.py --disable=all --enable=E || true
+          pylint services/openwebui/librarian_tool.py --disable=all --enable=E || true
+      - name: Validate sneakernet script
+        run: |
+          bash -n scripts/sneakernet.sh
+          bash -n scripts/verify_zim.sh
+          bash -n scripts/sync_wiki.sh
+
+  deploy-monitoring:
+    name: Deploy Monitoring Config
+    runs-on: ubuntu-latest
+    needs: [build-containers, ingest-validation]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Prometheus config structure
+        run: python3 -c "import yaml; c=yaml.safe_load(open('config/prometheus/prometheus.yml')); assert 'scrape_configs' in c, 'scrape_configs missing'"
+      - name: Validate Grafana dashboard JSON
+        run: python3 -c "import json; json.load(open('config/grafana/dashboards/alexandria.json'))"
+      - name: Deploy Prometheus config
+        run: echo "Deploy config/prometheus/prometheus.yml to Prometheus instance — SSH/SCP in production"
+      - name: Deploy Grafana dashboards
+        run: echo "Deploy config/grafana/ to Grafana instance — SSH/SCP in production"
+
+  deploy-proxy:
+    name: Deploy Traefik Config
+    runs-on: ubuntu-latest
+    needs: [build-containers]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Traefik dynamic config
+        run: python3 -c "import yaml; yaml.safe_load(open('config/traefik/dynamic/alexandria.yml'))"
+      - name: Deploy Traefik dynamic config
+        run: echo "Deploy config/traefik/dynamic/alexandria.yml to Traefik file provider — SSH/SCP in production"

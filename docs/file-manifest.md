@@ -18,14 +18,26 @@
 | File | Type | Purpose |
 |:-----|:-----|:--------|
 | `config/.env.example` | Config template | Environment variable template — copy to `.env` before use |
-| `config/podman-compose.yml` | Orchestration | Rootless Podman Compose — defines all 5 services |
-| `config/systemd/alexandria-sync.timer` | Systemd unit | Timer: weekly ZIM sync on Sunday 02:00 |
-| `config/systemd/alexandria-sync.service` | Systemd unit | Service: sync + WAN gate open/close |
-| `config/firewall/wan-gate.rules` | Firewall | Proxmox pve-firewall rules for AC-4 WAN gating |
+| `config/podman-compose.yml` | Orchestration | Rootless Podman Compose — defines all 4 services (updater removed) |
+| `config/systemd/alexandria-sync.timer` | Systemd unit | Timer: sneakernet import verification (on-demand) |
+| `config/systemd/alexandria-sync.service` | Systemd unit | Service: ZIM integrity verification after sneakernet import |
+| `config/firewall/wan-gate.rules` | Firewall | Proxmox pve-firewall rules for host-level policies |
+| `config/traefik/traefik.yml` | Config | Traefik v3 static configuration (entrypoints, PKI resolver, metrics) |
+| `config/traefik/dynamic/alexandria.yml` | Config | Traefik v3 dynamic config — routers, services, middlewares for Alexandria |
+| `config/prometheus/prometheus.yml` | Config | Prometheus scrape configuration for all Alexandria components |
+| `config/grafana/provisioning/datasources/prometheus.yml` | Config | Grafana datasource provisioning — Alexandria Prometheus |
+| `config/grafana/provisioning/dashboards/dashboard.yml` | Config | Grafana dashboard provisioning — folder and org settings |
+| `config/grafana/dashboards/alexandria.json` | Dashboard | Grafana dashboard — Project Alexandria System Overview |
 
 ---
 
-## 3. services/
+## 2a. .github/
+
+| File | Type | Purpose |
+|:-----|:-----|:--------|
+| `.github/workflows/alexandria-pipeline.yml` | CI/CD | GitHub Actions pipeline — validate, security scan, build containers with Podman, trivy CVE scan, deploy configs |
+
+---
 
 ### kiwix/
 
@@ -35,9 +47,7 @@
 
 ### updater/
 
-| File | Type | Purpose |
-|:-----|:-----|:--------|
-| `services/updater/Containerfile` | Container | Hardened Alpine sidecar for weekly ZIM sync |
+> **Removed:** The `updater` sidecar container has been removed. ZIM files are now imported exclusively via the sneakernet protocol (`scripts/sneakernet.sh`).
 
 ### chromadb/
 
@@ -65,10 +75,10 @@
 
 | File | Type | Purpose |
 |:-----|:-----|:--------|
-| `scripts/sync_wiki.sh` | Shell | Downloads ZIM + sha256, verifies, atomically replaces |
-| `scripts/verify_zim.sh` | Shell | Standalone ZIM integrity checker (manual or cron) |
-| `scripts/toggle_updates.sh` | Shell | WAN gate open/close via pvesh (SysAdmin only) |
-| `scripts/sneakernet.sh` | Shell | Air-gap physical media import with integrity verification |
+| `scripts/sync_wiki.sh` | Shell | Downloads ZIM + sha256, verifies, atomically replaces (for use on staging server) |
+| `scripts/verify_zim.sh` | Shell | Standalone ZIM integrity checker (manual or post-import) |
+| `scripts/toggle_updates.sh` | Shell | WAN gate open/close via pvesh — deprecated for automated use; manual override only |
+| `scripts/sneakernet.sh` | Shell | **Primary ZIM acquisition** — physical media import with integrity verification |
 
 ---
 
@@ -110,10 +120,12 @@ These paths are bind-mounted into containers at runtime and are excluded from ve
 
 | Category | Count |
 |:---------|------:|
-| Containerfiles | 5 |
+| Containerfiles | 4 |
 | Shell scripts | 4 |
 | Python files | 2 |
 | Systemd units | 2 |
-| Config / compose | 3 |
+| Config / compose | 7 |
+| CI/CD pipeline | 1 |
 | Documentation (Markdown) | 16 |
-| **Total tracked files** | **32** |
+| Grafana dashboard (JSON) | 1 |
+| **Total tracked files** | **37** |

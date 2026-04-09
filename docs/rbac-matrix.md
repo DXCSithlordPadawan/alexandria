@@ -17,7 +17,7 @@
 |:-----------------|:--------:|:------------:|:----------:|
 | **Proxmox host SSH** | ✅ | ❌ | ❌ |
 | **Podman container management** | ✅ | Read-only | ❌ |
-| **toggle_updates.sh (WAN gate)** | ✅ | ❌ | ❌ |
+| **toggle_updates.sh (deprecated — manual override only)** | ✅ | ❌ | ❌ |
 | **sync_wiki.sh (manual trigger)** | ✅ | ❌ | ❌ |
 | **sneakernet.sh (air-gap import)** | ✅ | ❌ | ❌ |
 | **verify_zim.sh** | ✅ | ✅ | ❌ |

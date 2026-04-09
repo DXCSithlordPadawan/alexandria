@@ -1,0 +1,65 @@
+# Project Alexandria — Traefik v3 Dynamic Configuration
+# Drop into the Traefik file provider directory (/etc/traefik/dynamic/)
+# Traefik watches this directory and applies changes without restart.
+
+http:
+  routers:
+    alexandria-webui:
+      rule: "Host(`alexandria.internal`)"
+      entryPoints:
+        - websecure
+      service: alexandria-webui
+      tls:
+        certResolver: internal-pki
+      middlewares:
+        - secureHeaders
+        - rateLimit
+
+    alexandria-kiwix:
+      rule: "Host(`kiwix.alexandria.internal`)"
+      entryPoints:
+        - websecure
+      service: alexandria-kiwix
+      tls:
+        certResolver: internal-pki
+      middlewares:
+        - secureHeaders
+
+  services:
+    alexandria-webui:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:3000"
+        healthCheck:
+          path: /health
+          interval: 30s
+          timeout: 5s
+
+    alexandria-kiwix:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:8080"
+        healthCheck:
+          path: /catalog/root.xml
+          interval: 60s
+          timeout: 10s
+
+  middlewares:
+    secureHeaders:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        contentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=()"
+
+    rateLimit:
+      rateLimit:
+        average: 100
+        burst: 50
+        period: 1s

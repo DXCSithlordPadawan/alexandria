@@ -21,15 +21,15 @@
 |:-----------|:-------------|:---------------|
 | AC-2 | Account Management | Linux accounts via `useradd`; Open WebUI user management; `alexandria-admin` group |
 | AC-3 | Access Enforcement | RBAC matrix enforced at OS and WebUI level |
-| AC-4 | Information Flow Enforcement | `internal: true` Podman networks; WAN gate via pve-firewall; Sunday 02:00 window only |
+| AC-4 | Information Flow Enforcement | `internal: true` Podman networks; no direct WAN from Proxmox cluster; ZIM acquired exclusively via sneakernet from external staging server |
 | AC-6 | Least Privilege | All containers: `cap_drop: ALL`; rootless Podman; no-new-privileges |
 | AU-2 | Event Logging | journald for all systemd services; container logs; WAN gate audit log |
 | AU-9 | Protection of Audit Information | Log files owner `root:alexandria`, mode `640`; journald with `ForwardToSyslog` |
 | CM-6 | Configuration Settings | CIS Level 2 sysctl applied; Containerfiles version-pinned |
 | CM-7 | Least Functionality | Containers run single process; all unused caps dropped; read-only root FS |
 | IA-5 | Authenticator Management | Podman secret for WebUI key; no plaintext secrets in files |
-| MP-5 | Media Transport | Sneakernet protocol with FIPS 140-3 validated hardware-encrypted USB; sha256 verification |
-| SC-8 | Transmission Confidentiality | TLS 1.3 on nginx reverse proxy; internal traffic on isolated bridge |
+| MP-5 | Media Transport | Sneakernet protocol is the primary ZIM acquisition method; FIPS 140-3 validated hardware-encrypted USB required; sha256 verification before and after transfer |
+| SC-8 | Transmission Confidentiality | TLS 1.3 on Traefik reverse proxy (self-hosted PKI cert); internal traffic on isolated bridge |
 | SC-28 | Protection of Information at Rest | LUKS2 encryption on Proxmox storage pool; FIPS-validated modules required |
 | SI-2 | Flaw Remediation | Pinned image versions; quarterly rebuild with updated pins |
 | SI-7 | Software Integrity | sha256sum on every ZIM download; atomic file replacement |

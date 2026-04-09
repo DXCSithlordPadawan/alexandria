@@ -1,0 +1,51 @@
+# Project Alexandria — Traefik v3 Static Configuration
+# This config is for the existing Traefik instance; drop into /etc/traefik/traefik.yml
+# Compliance: FIPS 140-3, NIST SC-8, DISA STIG
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+api:
+  dashboard: true
+  insecure: false   # dashboard secured behind middleware — do not expose publicly
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: internal-pki
+
+certificatesResolvers:
+  internal-pki:
+    acme:
+      email: admin@alexandria.internal
+      storage: /etc/traefik/acme/acme.json
+      # Point to the self-hosted PKI / ACME server (e.g. Step-CA or Vault PKI)
+      caServer: https://pki.internal/acme/acme/directory
+      tlsChallenge: {}
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic/
+    watch: true
+
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    addRoutersLabels: true
+    entryPoint: websecure
