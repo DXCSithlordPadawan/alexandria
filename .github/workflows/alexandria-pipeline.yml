@@ -67,7 +67,7 @@ jobs:
             --label "git-commit=${{ github.sha }}" \
             services/${{ matrix.service }}/
       - name: Scan image with trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.29.0
         with:
           image-ref: localhost/alexandria-${{ matrix.service }}:${{ github.sha }}
           format: table
