@@ -11,16 +11,18 @@ Project Alexandria delivers a secure, offline-first knowledge ecosystem on a sin
 
 ```mermaid
 graph TD
-    U[User / Researcher] -->|HTTPS via reverse proxy| OW[Open WebUI :3000]
-    OW -->|Ollama API| OL[Ollama LLM]
-    OW -->|Librarian Tool| LT[librarian_tool.py]
-    LT -->|Search API| KW[Kiwix :8080]
-    LT -->|Vector query| CH[ChromaDB :8000]
-    CH -->|Embeddings from| ED[/data/edits]
-    KW -->|Serves| ZIM[/data/zim/*.zim]
-    UP[Updater Sidecar] -->|Weekly wget| ZIM
-    WAN[WAN / Internet] -.->|AC-4 gated Sun 02:00| UP
-    SA[SysAdmin] -->|toggle_updates.sh| FW[Proxmox Firewall]
+    U["User / Researcher"] -->|HTTPS via reverse proxy| OW["Open WebUI :3000"]
+    OW -->|Ollama API| OL["Ollama LLM"]
+    OW -->|Librarian Tool| LT["librarian_tool.py"]
+    LT -->|Search API| KW["Kiwix :8080"]
+    LT -->|Vector query| CH["ChromaDB :8000"]
+    CH -->|Embeddings from| ED["/data/edits"]
+    KW -->|Serves| ZIM["/data/zim/*.zim"]
+
+    UP["Updater Sidecar"] -->|Weekly wget| ZIM
+    WAN["WAN / Internet"] -.->|AC-4 gated Sun 02:00| UP
+
+    SA["SysAdmin"] -->|toggle_updates.sh| FW["Proxmox Firewall"]
     FW -.->|allow/deny| WAN
 ```
 
